@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(cuid())
+  firstName     String
+  surname       String
+  email         String   @unique
+  passwordHash  String
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions     Session[]
+  resetTokens  PasswordResetToken[]
+  emailChanges EmailChangeVerification[]
+
+  @@map("users")
+}
+
+model PendingSignup {
+  id           String @id @default(cuid())
+  firstName    String
+  surname      String
+  email        String
+  passwordHash String
+
+  otpHash      String
+  otpExpiresAt DateTime
+  otpAttempts  Int      @default(0)
+
+  otpRequestCount       Int       @default(0)
+  otpRequestWindowStart DateTime?
+
+  verificationTokenHash      String?   @unique
+  verificationTokenExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@map("pending_signups")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailChangeVerification {
+  id     String @id @default(cuid())
+  userId String
+
+  currentEmail String
+  newEmail     String
+
+  /**
+   * OTP sent to the user's
+   * current/original email.
+   */
+  otpHash      String
+  otpExpiresAt DateTime
+  otpAttempts  Int      @default(0)
+
+  /**
+   * Verification token sent
+   * to the new email after
+   * the current email OTP
+   * is successfully verified.
+   */
+  verificationTokenHash      String?   @unique
+  verificationTokenExpiresAt DateTime?
+
+  /**
+   * Prevent the email from being
+   * changed until the new-email
+   * verification link is confirmed.
+   */
+  newEmailVerified Boolean @default(false)
+
+  /**
+   * Resend rate limiting:
+   * maximum 3 verification-token
+   * emails in a rolling 3-hour window.
+   */
+  verificationRequestCount       Int       @default(0)
+  verificationRequestWindowStart DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([newEmail])
+  @@index([verificationTokenExpiresAt])
+  @@map("email_change_verifications")
+}
