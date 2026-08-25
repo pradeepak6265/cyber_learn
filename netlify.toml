@@ -1,0 +1,5 @@
+[build]
+  command = "npm run build"
+
+[build.environment]
+  SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/cache/**"
