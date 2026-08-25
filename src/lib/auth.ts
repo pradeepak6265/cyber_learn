@@ -94,6 +94,27 @@ export async function getCurrentUser() {
 
     emailVerified:
       session.user.emailVerified,
+
+    /*
+     * Authentication state is returned
+     * for Account Settings.
+     *
+     * Possible values:
+     * - password
+     * - google
+     * - password+google
+     */
+    authProvider:
+      session.user.authProvider,
+
+    /*
+     * Google ID is returned only as a
+     * connection-status indicator.
+     *
+     * It is not a secret credential.
+     */
+    googleId:
+      session.user.googleId,
   };
 }
 

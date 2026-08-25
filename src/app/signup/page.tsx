@@ -12,10 +12,14 @@ import { useRouter } from "next/navigation";
 export default function SignupPage() {
   const router = useRouter();
 
-  const [firstName, setFirstName] = useState("");
-  const [surname, setSurname] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [firstName, setFirstName] =
+    useState("");
+  const [surname, setSurname] =
+    useState("");
+  const [email, setEmail] =
+    useState("");
+  const [password, setPassword] =
+    useState("");
   const [confirmPassword, setConfirmPassword] =
     useState("");
   const [termsAccepted, setTermsAccepted] =
@@ -23,7 +27,8 @@ export default function SignupPage() {
   const [passwordFocused, setPasswordFocused] =
     useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
   const [serverError, setServerError] =
     useState("");
   const [accountExists, setAccountExists] =
@@ -67,19 +72,25 @@ export default function SignupPage() {
         password.length >= 8 &&
         password.length <= 25,
 
-      uppercase: /[A-Z]/.test(password),
+      uppercase:
+        /[A-Z]/.test(password),
 
-      lowercase: /[a-z]/.test(password),
+      lowercase:
+        /[a-z]/.test(password),
 
-      number: /[0-9]/.test(password),
+      number:
+        /[0-9]/.test(password),
 
-      special: /[^A-Za-z0-9]/.test(password),
+      special:
+        /[^A-Za-z0-9]/.test(password),
     }),
     [password]
   );
 
   const passwordValid =
-    Object.values(passwordRules).every(Boolean);
+    Object.values(passwordRules).every(
+      Boolean
+    );
 
   /* =========================
      CONFIRM PASSWORD
@@ -163,17 +174,26 @@ export default function SignupPage() {
           },
 
           body: JSON.stringify({
-            firstName: firstName.trim(),
-            surname: surname.trim(),
+            firstName:
+              firstName.trim(),
+
+            surname:
+              surname.trim(),
+
             email:
-              email.trim().toLowerCase(),
+              email
+                .trim()
+                .toLowerCase(),
+
             password,
+
             confirmPassword,
           }),
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       /* =========================
          EXISTING ACCOUNT
@@ -228,15 +248,26 @@ export default function SignupPage() {
     }
   }
 
+  /* =========================
+     GOOGLE AUTHENTICATION
+  ========================= */
+
+  function continueWithGoogle() {
+    if (loading) {
+      return;
+    }
+
+    window.location.href =
+      "/api/auth/google/start";
+  }
+
   return (
     <main className="auth-page">
-
       {/* =========================
           HEADER
       ========================= */}
 
       <header className="auth-header">
-
         <a
           href="/"
           className="brand"
@@ -267,7 +298,6 @@ export default function SignupPage() {
             Login
           </a>
         </nav>
-
       </header>
 
       {/* =========================
@@ -275,15 +305,12 @@ export default function SignupPage() {
       ========================= */}
 
       <section className="signup-section">
-
         <div className="signup-card">
-
           {/* =========================
               HEADING
           ========================= */}
 
           <div className="signup-heading">
-
             <p className="eyebrow auth-eyebrow">
               JOIN CYBERLEARN
             </p>
@@ -298,7 +325,6 @@ export default function SignupPage() {
               practice, questions and
               focused preparation.
             </p>
-
           </div>
 
           {/* =========================
@@ -309,19 +335,17 @@ export default function SignupPage() {
             onSubmit={handleSubmit}
             className="signup-form"
           >
-
             {/* =========================
                 FIRST NAME + SURNAME
             ========================= */}
 
             <div className="form-row">
-
               {/* First Name */}
 
               <div className="form-field">
-
                 <label htmlFor="firstName">
-                  First Name <span>*</span>
+                  First Name{" "}
+                  <span>*</span>
                 </label>
 
                 <input
@@ -337,6 +361,7 @@ export default function SignupPage() {
                     setFirstName(
                       event.target.value
                     );
+
                     setServerError("");
                     setAccountExists(false);
                   }}
@@ -352,13 +377,11 @@ export default function SignupPage() {
                       characters.
                     </p>
                   )}
-
               </div>
 
               {/* Surname */}
 
               <div className="form-field">
-
                 <label htmlFor="surname">
                   Surname <span>*</span>
                 </label>
@@ -376,6 +399,7 @@ export default function SignupPage() {
                     setSurname(
                       event.target.value
                     );
+
                     setServerError("");
                     setAccountExists(false);
                   }}
@@ -391,9 +415,7 @@ export default function SignupPage() {
                       characters.
                     </p>
                   )}
-
               </div>
-
             </div>
 
             {/* =========================
@@ -401,9 +423,9 @@ export default function SignupPage() {
             ========================= */}
 
             <div className="form-field">
-
               <label htmlFor="email">
-                Email Address <span>*</span>
+                Email Address{" "}
+                <span>*</span>
               </label>
 
               <input
@@ -417,6 +439,7 @@ export default function SignupPage() {
                   setEmail(
                     event.target.value
                   );
+
                   setServerError("");
                   setAccountExists(false);
                 }}
@@ -430,7 +453,6 @@ export default function SignupPage() {
                     Your email is incorrect.
                   </p>
                 )}
-
             </div>
 
             {/* =========================
@@ -441,9 +463,7 @@ export default function SignupPage() {
               className="password-field-wrapper"
               ref={passwordWrapperRef}
             >
-
               <div className="form-field">
-
                 <label htmlFor="password">
                   Password <span>*</span>
                 </label>
@@ -461,7 +481,9 @@ export default function SignupPage() {
                       password.length > 0 &&
                       !passwordValid
                     ) {
-                      setPasswordFocused(true);
+                      setPasswordFocused(
+                        true
+                      );
                     }
                   }}
                   onChange={(event) => {
@@ -475,7 +497,10 @@ export default function SignupPage() {
                     if (
                       value.length === 0
                     ) {
-                      setPasswordFocused(false);
+                      setPasswordFocused(
+                        false
+                      );
+
                       return;
                     }
 
@@ -483,23 +508,32 @@ export default function SignupPage() {
                       !(
                         value.length >= 8 &&
                         value.length <= 25 &&
-                        /[A-Z]/.test(value) &&
-                        /[a-z]/.test(value) &&
-                        /[0-9]/.test(value) &&
+                        /[A-Z]/.test(
+                          value
+                        ) &&
+                        /[a-z]/.test(
+                          value
+                        ) &&
+                        /[0-9]/.test(
+                          value
+                        ) &&
                         /[^A-Za-z0-9]/.test(
                           value
                         )
                       )
                     ) {
-                      setPasswordFocused(true);
+                      setPasswordFocused(
+                        true
+                      );
                     } else {
-                      setPasswordFocused(false);
+                      setPasswordFocused(
+                        false
+                      );
                     }
                   }}
                   required
                   disabled={loading}
                 />
-
               </div>
 
               {/* =========================
@@ -508,11 +542,8 @@ export default function SignupPage() {
 
               {passwordFocused &&
                 !passwordValid && (
-
                   <div className="password-requirements">
-
                     <div className="password-requirements-header">
-
                       <div>
                         Password requirements
                       </div>
@@ -521,15 +552,14 @@ export default function SignupPage() {
                         {
                           Object.values(
                             passwordRules
-                          ).filter(Boolean).length
+                          ).filter(Boolean)
+                            .length
                         }
                         /5
                       </span>
-
                     </div>
 
                     <div className="password-rules-list">
-
                       <PasswordRule
                         valid={
                           passwordRules.length
@@ -564,13 +594,9 @@ export default function SignupPage() {
                         }
                         text="At least 1 special character (@, #, !, etc.)"
                       />
-
                     </div>
-
                   </div>
-
                 )}
-
             </div>
 
             {/* =========================
@@ -578,9 +604,9 @@ export default function SignupPage() {
             ========================= */}
 
             <div className="form-field">
-
               <label htmlFor="confirmPassword">
-                Confirm Password <span>*</span>
+                Confirm Password{" "}
+                <span>*</span>
               </label>
 
               <input
@@ -595,6 +621,7 @@ export default function SignupPage() {
                   setConfirmPassword(
                     event.target.value
                   );
+
                   setServerError("");
                   setAccountExists(false);
                 }}
@@ -602,7 +629,8 @@ export default function SignupPage() {
                 disabled={loading}
               />
 
-              {confirmPassword.length > 0 &&
+              {confirmPassword.length >
+                0 &&
                 !confirmPasswordValid && (
                   <p className="field-error">
                     Confirm password does
@@ -615,7 +643,6 @@ export default function SignupPage() {
                   ✓ Passwords match.
                 </p>
               )}
-
             </div>
 
             {/* =========================
@@ -623,7 +650,6 @@ export default function SignupPage() {
             ========================= */}
 
             <label className="terms-row">
-
               <input
                 type="checkbox"
                 checked={termsAccepted}
@@ -650,7 +676,6 @@ export default function SignupPage() {
                 </a>
                 .
               </span>
-
             </label>
 
             {/* =========================
@@ -659,7 +684,6 @@ export default function SignupPage() {
 
             {serverError && (
               <div className="signup-server-error">
-
                 <p className="field-error">
                   {serverError}
                 </p>
@@ -673,7 +697,6 @@ export default function SignupPage() {
                     </a>
                   </p>
                 )}
-
               </div>
             )}
 
@@ -696,11 +719,9 @@ export default function SignupPage() {
             ========================= */}
 
             <div className="auth-divider">
-
               <span>
                 or continue with
               </span>
-
             </div>
 
             {/* =========================
@@ -710,21 +731,17 @@ export default function SignupPage() {
             <button
               type="button"
               className="google-button"
-              onClick={() => {
-                // Google authentication
-                // will be connected later.
-              }}
+              onClick={
+                continueWithGoogle
+              }
               disabled={loading}
             >
-
               <GoogleIcon />
 
               <span>
                 Continue with Google
               </span>
-
             </button>
-
           </form>
 
           {/* =========================
@@ -732,23 +749,17 @@ export default function SignupPage() {
           ========================= */}
 
           <p className="login-prompt">
-
             Already have an account?
 
             <a href="/login">
               {" "}Login
             </a>
-
           </p>
-
         </div>
-
       </section>
-
     </main>
   );
 }
-
 
 /* =========================
    PASSWORD RULE COMPONENT
@@ -769,7 +780,6 @@ function PasswordRule({
           : ""
       }`}
     >
-
       <span className="password-rule-icon">
         {valid ? "✓" : ""}
       </span>
@@ -777,11 +787,9 @@ function PasswordRule({
       <span>
         {text}
       </span>
-
     </div>
   );
 }
-
 
 /* =========================
    GOOGLE ICON
@@ -794,7 +802,6 @@ function GoogleIcon() {
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-
       <path
         fill="#4285F4"
         d="M21.35 12.27c0-.68-.06-1.34-.17-1.97H12v3.73h5.23a4.47 4.47 0 0 1-1.94 2.93v2.44h3.14c1.84-1.69 2.92-4.18 2.92-7.13Z"
@@ -814,7 +821,6 @@ function GoogleIcon() {
         fill="#EA4335"
         d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.46 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.39l3.24 2.52C7.31 8.1 9.46 6.38 12 6.38Z"
       />
-
     </svg>
   );
 }

@@ -1,6 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 
 type AccountSettingsClientProps = {
@@ -8,6 +13,8 @@ type AccountSettingsClientProps = {
   surname: string;
   email: string;
   emailVerified: boolean;
+  authProvider: string;
+  googleId: string | null;
 };
 
 type EmailChangeStep =
@@ -16,13 +23,153 @@ type EmailChangeStep =
   | "verify-current"
   | "sent";
 
+type PasswordMode = "idle" | "change" | "set";
+type DeleteStep = "idle" | "confirm" | "otp" | "deleted";
+
 export default function AccountSettingsClient({
   firstName: initialFirstName,
   surname: initialSurname,
   email,
   emailVerified,
+  authProvider,
+  googleId,
 }: AccountSettingsClientProps) {
   const router = useRouter();
+
+  /* =========================
+     PASSWORD STATE
+  ========================= */
+
+  const [passwordMode, setPasswordMode] =
+    useState<PasswordMode>("idle");
+
+  const [currentPassword, setCurrentPassword] =
+    useState("");
+
+  const [newPassword, setNewPassword] =
+    useState("");
+
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
+
+  const [showPasswordRequirements, setShowPasswordRequirements] =
+    useState(false);
+
+  const passwordRequirementsRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const [passwordError, setPasswordError] =
+    useState("");
+
+  const [passwordSuccess, setPasswordSuccess] =
+    useState("");
+
+  const [isPasswordLoading, setIsPasswordLoading] =
+    useState(false);
+
+  /* =========================
+     GOOGLE STATE
+  ========================= */
+
+  const googleConnected =
+    Boolean(googleId);
+
+  const [showGoogleDisconnectModal, setShowGoogleDisconnectModal] =
+    useState(false);
+
+  const [isGoogleLoading, setIsGoogleLoading] =
+    useState(false);
+
+  const [googleError, setGoogleError] =
+    useState("");
+
+  /* =========================
+     ACCOUNT DELETE STATE
+  ========================= */
+
+  const [deleteStep, setDeleteStep] =
+    useState<DeleteStep>("idle");
+
+  const [deleteOtp, setDeleteOtp] =
+    useState("");
+
+  const [deleteError, setDeleteError] =
+    useState("");
+
+  const [isDeleteLoading, setIsDeleteLoading] =
+    useState(false);
+
+  const [deleteOtpDigits, setDeleteOtpDigits] =
+    useState(["", "", "", "", "", ""]);
+
+  const deleteOtpRefs =
+    Array.from(
+      { length: 6 },
+      () =>
+        null as HTMLInputElement | null
+    );
+
+  const passwordHasMinLength =
+    newPassword.length >= 8 &&
+    newPassword.length <= 25;
+
+  const passwordHasUppercase =
+    /[A-Z]/.test(newPassword);
+
+  const passwordHasLowercase =
+    /[a-z]/.test(newPassword);
+
+  const passwordHasNumber =
+    /[0-9]/.test(newPassword);
+
+  const passwordHasSpecial =
+    /[^A-Za-z0-9]/.test(newPassword);
+
+  const passwordMatches =
+    newPassword.length > 0 &&
+    newPassword === confirmPassword;
+
+  const passwordValid =
+    passwordHasMinLength &&
+    passwordHasUppercase &&
+    passwordHasLowercase &&
+    passwordHasNumber &&
+    passwordHasSpecial;
+
+  const canSubmitPassword =
+    passwordValid &&
+    passwordMatches &&
+    !isPasswordLoading &&
+    (passwordMode === "set" ||
+      currentPassword.length > 0);
+
+
+  /* =========================
+     PASSWORD REQUIREMENTS POPOVER
+  ========================= */
+
+  useEffect(() => {
+    if (!showPasswordRequirements) {
+      return;
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Node;
+
+      if (
+        passwordRequirementsRef.current &&
+        !passwordRequirementsRef.current.contains(target)
+      ) {
+        setShowPasswordRequirements(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [showPasswordRequirements]);
 
   /* =========================
      PROFILE STATE
@@ -582,6 +729,450 @@ export default function AccountSettingsClient({
     }
   }
 
+
+  /* =========================
+     PASSWORD
+  ========================= */
+
+  function openPasswordSettings() {
+    const googleOnly =
+      authProvider === "google" &&
+      Boolean(googleId);
+
+    setPasswordMode(
+      googleOnly ? "set" : "change"
+    );
+
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
+    setPasswordSuccess("");
+    setShowPasswordRequirements(false);
+  }
+
+  function closePasswordSettings() {
+    if (isPasswordLoading) {
+      return;
+    }
+
+    setPasswordMode("idle");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
+    setPasswordSuccess("");
+    setShowPasswordRequirements(false);
+  }
+
+  async function handlePasswordSubmit() {
+    if (!canSubmitPassword) {
+      return;
+    }
+
+    setPasswordError("");
+    setPasswordSuccess("");
+    setIsPasswordLoading(true);
+
+    try {
+      const endpoint =
+        passwordMode === "set"
+          ? "/api/auth/password/set"
+          : "/api/auth/password/change";
+
+      const body =
+        passwordMode === "set"
+          ? {
+              newPassword,
+              confirmPassword,
+            }
+          : {
+              currentPassword,
+              newPassword,
+              confirmPassword,
+            };
+
+      const response = await fetch(
+        endpoint,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        setPasswordError(
+          typeof data.message ===
+            "string"
+            ? data.message
+            : "Unable to update password."
+        );
+        return;
+      }
+
+      setPasswordSuccess(
+        passwordMode === "set"
+          ? "Password created successfully."
+          : "Password changed successfully."
+      );
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowPasswordRequirements(false);
+
+      /*
+       * After setting a password on a
+       * Google-only account, refresh the
+       * server-rendered authentication
+       * state so the UI switches to
+       * Change Password.
+       */
+      router.refresh();
+
+      setTimeout(() => {
+        setPasswordMode("idle");
+      }, 1200);
+    } catch (error) {
+      console.error(
+        "Password update error:",
+        error
+      );
+
+      setPasswordError(
+        "Unable to connect to the server. Please try again."
+      );
+    } finally {
+      setIsPasswordLoading(false);
+    }
+  }
+
+  /* =========================
+     GOOGLE CONNECT
+  ========================= */
+
+  function handleConnectGoogle() {
+    setGoogleError("");
+
+    /*
+     * The server creates and stores the
+     * OAuth state before redirecting to
+     * Google.
+     */
+    window.location.href =
+      "/api/auth/google/connect";
+  }
+
+  function handleGoogleConnectedClick() {
+    setGoogleError("");
+    setShowGoogleDisconnectModal(true);
+  }
+
+  async function handleDisconnectGoogle() {
+    if (isGoogleLoading) {
+      return;
+    }
+
+    setIsGoogleLoading(true);
+    setGoogleError("");
+
+    try {
+      const response = await fetch(
+        "/api/auth/google/disconnect",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        setGoogleError(
+          typeof data.message ===
+            "string"
+            ? data.message
+            : "Unable to disconnect Google."
+        );
+        return;
+      }
+
+      setShowGoogleDisconnectModal(false);
+
+      /*
+       * Refresh server props so the
+       * connected state is updated.
+       */
+      router.refresh();
+    } catch (error) {
+      console.error(
+        "Google disconnect error:",
+        error
+      );
+
+      setGoogleError(
+        "Unable to connect to the server. Please try again."
+      );
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  }
+
+  /* =========================
+     ACCOUNT DELETE
+  ========================= */
+
+  function openDeleteConfirmation() {
+    setDeleteError("");
+    setDeleteOtp("");
+    setDeleteOtpDigits([
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+    setDeleteStep("confirm");
+  }
+
+  function cancelDeleteFlow() {
+    if (isDeleteLoading) {
+      return;
+    }
+
+    setDeleteError("");
+    setDeleteOtp("");
+    setDeleteOtpDigits([
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+    setDeleteStep("idle");
+  }
+
+  async function requestDeleteOtp() {
+    if (isDeleteLoading) {
+      return;
+    }
+
+    setIsDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch(
+        "/api/auth/account/delete/request",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        setDeleteError(
+          typeof data.message ===
+            "string"
+            ? data.message
+            : "Unable to send the deletion OTP."
+        );
+        return;
+      }
+
+      setDeleteOtp("");
+      setDeleteOtpDigits([
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ]);
+      setDeleteStep("otp");
+    } catch (error) {
+      console.error(
+        "Account deletion OTP request error:",
+        error
+      );
+
+      setDeleteError(
+        "Unable to connect to the server. Please try again."
+      );
+    } finally {
+      setIsDeleteLoading(false);
+    }
+  }
+
+  function handleDeleteOtpChange(
+    index: number,
+    value: string
+  ) {
+    const digit =
+      value.replace(/\D/g, "").slice(-1);
+
+    const nextDigits = [
+      ...deleteOtpDigits,
+    ];
+
+    nextDigits[index] = digit;
+
+    setDeleteOtpDigits(nextDigits);
+    setDeleteError("");
+
+    const combined =
+      nextDigits.join("");
+
+    setDeleteOtp(combined);
+
+    if (
+      digit &&
+      index < 5
+    ) {
+      const nextInput =
+        document.getElementById(
+          `delete-otp-${index + 1}`
+        ) as HTMLInputElement | null;
+
+      nextInput?.focus();
+    }
+
+    if (
+      combined.length === 6
+    ) {
+      void verifyDeleteOtp(combined);
+    }
+  }
+
+  function handleDeleteOtpKeyDown(
+    index: number,
+    event: KeyboardEvent<HTMLInputElement>
+  ) {
+    if (
+      event.key === "Backspace" &&
+      !deleteOtpDigits[index] &&
+      index > 0
+    ) {
+      const previousInput =
+        document.getElementById(
+          `delete-otp-${index - 1}`
+        ) as HTMLInputElement | null;
+
+      previousInput?.focus();
+    }
+  }
+
+  async function verifyDeleteOtp(
+    otpValue: string
+  ) {
+    if (
+      isDeleteLoading ||
+      otpValue.length !== 6
+    ) {
+      return;
+    }
+
+    setIsDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch(
+        "/api/auth/account/delete/verify",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            otp: otpValue,
+          }),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        setDeleteError(
+          typeof data.message ===
+            "string"
+            ? data.message
+            : "The OTP is invalid or expired."
+        );
+
+        setDeleteOtp("");
+        setDeleteOtpDigits([
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ]);
+
+        setTimeout(() => {
+          const firstInput =
+            document.getElementById(
+              "delete-otp-0"
+            ) as HTMLInputElement | null;
+
+          firstInput?.focus();
+        }, 0);
+
+        return;
+      }
+
+      /*
+       * The server has permanently deleted
+       * the authenticated user's account.
+       */
+      setDeleteStep("deleted");
+      setDeleteOtp("");
+      setDeleteOtpDigits([
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ]);
+    } catch (error) {
+      console.error(
+        "Account deletion verification error:",
+        error
+      );
+
+      setDeleteError(
+        "Unable to connect to the server. Please try again."
+      );
+    } finally {
+      setIsDeleteLoading(false);
+    }
+  }
+
   /* =========================
      UI
   ========================= */
@@ -1006,31 +1597,546 @@ export default function AccountSettingsClient({
       </section>
 
       {/* =========================
+          PASSWORD
+      ========================= */}
+
+      <section className="settings-card">
+        <div className="section-header">
+          <div>
+            <h2>
+              {passwordMode === "set"
+                ? "Set Password"
+                : "Password"}
+            </h2>
+
+            <p>
+              {passwordMode === "set"
+                ? "Create a password so you can also sign in with your email and password."
+                : "Update the password used to protect your account."}
+            </p>
+          </div>
+
+          {passwordMode === "idle" && (
+            <button
+              type="button"
+              onClick={openPasswordSettings}
+              className="secondary-button"
+            >
+              {authProvider === "google" &&
+              Boolean(googleId)
+                ? "Set password"
+                : "Change password"}
+            </button>
+          )}
+        </div>
+
+        {passwordSuccess && (
+          <div className="success-message">
+            {passwordSuccess}
+          </div>
+        )}
+
+        {passwordError && (
+          <div className="error-message">
+            {passwordError}
+          </div>
+        )}
+
+        {passwordMode !== "idle" && (
+          <div className="password-flow">
+            {passwordMode === "change" && (
+              <div>
+                <label
+                  htmlFor="current-password"
+                  className="field-label"
+                >
+                  Current password
+                </label>
+
+                <input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => {
+                    setCurrentPassword(
+                      event.target.value
+                    );
+                    setPasswordError("");
+                  }}
+                  autoComplete="current-password"
+                  className="settings-input"
+                  disabled={isPasswordLoading}
+                />
+              </div>
+            )}
+
+            <div
+              ref={passwordRequirementsRef}
+              className="password-field-wrapper"
+            >
+              <label
+                htmlFor="new-password"
+                className="field-label"
+              >
+                New password
+              </label>
+
+              <input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onFocus={() =>
+                  setShowPasswordRequirements(true)
+                }
+                onChange={(event) => {
+                  setNewPassword(event.target.value);
+                  setPasswordError("");
+                  setPasswordSuccess("");
+                  setShowPasswordRequirements(true);
+                }}
+                autoComplete="new-password"
+                maxLength={25}
+                className="settings-input"
+                disabled={isPasswordLoading}
+              />
+
+              {showPasswordRequirements && (
+                <div
+                  className="password-requirements"
+                  role="tooltip"
+                >
+                  <div className="password-requirements-arrow" />
+
+                  <p>Password must contain:</p>
+
+                  <PasswordRequirement
+                    valid={passwordHasMinLength}
+                    text="8–25 characters"
+                  />
+
+                  <PasswordRequirement
+                    valid={passwordHasUppercase}
+                    text="At least one uppercase letter"
+                  />
+
+                  <PasswordRequirement
+                    valid={passwordHasLowercase}
+                    text="At least one lowercase letter"
+                  />
+
+                  <PasswordRequirement
+                    valid={passwordHasNumber}
+                    text="At least one number"
+                  />
+
+                  <PasswordRequirement
+                    valid={passwordHasSpecial}
+                    text="At least one special character"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="confirm-password"
+                className="field-label"
+              >
+                Confirm new password
+              </label>
+
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => {
+                  setConfirmPassword(
+                    event.target.value
+                  );
+                  setPasswordError("");
+                  setPasswordSuccess("");
+                }}
+                autoComplete="new-password"
+                maxLength={25}
+                className="settings-input"
+                disabled={isPasswordLoading}
+              />
+
+              {confirmPassword.length > 0 &&
+                !passwordMatches && (
+                  <p className="password-match-error">
+                    Passwords do not match.
+                  </p>
+                )}
+            </div>
+
+            <div className="form-actions">
+              <button
+                type="button"
+                onClick={closePasswordSettings}
+                disabled={isPasswordLoading}
+                className="secondary-button"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  handlePasswordSubmit
+                }
+                disabled={
+                  !canSubmitPassword
+                }
+                className="primary-button"
+              >
+                {isPasswordLoading
+                  ? "Saving..."
+                  : passwordMode === "set"
+                    ? "Set password"
+                    : "Change password"}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* =========================
           GOOGLE
       ========================= */}
 
       <section className="settings-card google-card">
         <div className="google-content">
+          <div className="google-info">
+            <GoogleIcon />
+
+            <div>
+              <h2>
+                Connect with Google
+              </h2>
+
+              <p>
+                {googleConnected
+                  ? "Your Google account is connected."
+                  : "Connect your Google account for easier sign-in."}
+              </p>
+            </div>
+          </div>
+
+          {googleConnected ? (
+            <button
+              type="button"
+              onClick={
+                handleGoogleConnectedClick
+              }
+              disabled={isGoogleLoading}
+              className="secondary-button google-status-button"
+            >
+              <span className="connected-dot" />
+              Connected
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleConnectGoogle}
+              disabled={isGoogleLoading}
+              className="secondary-button google-status-button"
+            >
+              <GoogleIcon />
+              Connect
+            </button>
+          )}
+        </div>
+
+        {googleError && (
+          <div className="error-message">
+            {googleError}
+          </div>
+        )}
+      </section>
+
+      {/* =========================
+          DELETE ACCOUNT
+      ========================= */}
+
+      <section className="settings-card danger-card">
+        <div className="section-header">
           <div>
             <h2>
-              Connect with Google
+              Delete Account
             </h2>
 
             <p>
-              Connect your Google account
-              for easier sign-in.
+              Permanently delete your
+              CyberLearn account and its
+              associated data.
             </p>
           </div>
 
-          <button
-            type="button"
-            disabled
-            className="disabled-button"
-          >
-            Connect
-          </button>
+          {deleteStep === "idle" && (
+            <button
+              type="button"
+              onClick={
+                openDeleteConfirmation
+              }
+              className="danger-button"
+            >
+              Delete account
+            </button>
+          )}
         </div>
       </section>
+
+      {/* =========================
+          GOOGLE DISCONNECT MODAL
+      ========================= */}
+
+      {showGoogleDisconnectModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="google-disconnect-title"
+          className="modal-overlay"
+        >
+          <div className="modal-card">
+            <div className="modal-icon google-modal-icon">
+              <GoogleIcon />
+            </div>
+
+            <h2 id="google-disconnect-title">
+              Disconnect Google?
+            </h2>
+
+            <p>
+              Your Google account will be
+              disconnected from CyberLearn.
+              You can connect it again later.
+            </p>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={() =>
+                  setShowGoogleDisconnectModal(
+                    false
+                  )
+                }
+                disabled={isGoogleLoading}
+                className="secondary-button"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  handleDisconnectGoogle
+                }
+                disabled={isGoogleLoading}
+                className="danger-button"
+              >
+                {isGoogleLoading
+                  ? "Disconnecting..."
+                  : "Disconnect"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================
+          ACCOUNT DELETE MODAL
+      ========================= */}
+
+      {deleteStep === "confirm" && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+          className="modal-overlay"
+        >
+          <div className="modal-card">
+            <div className="modal-icon danger-modal-icon">
+              !
+            </div>
+
+            <h2 id="delete-account-title">
+              Are you sure to delete your
+              account?
+            </h2>
+
+            <p>
+              This action cannot be undone.
+              You will receive a verification
+              code at your current email
+              address before your account is
+              permanently deleted.
+            </p>
+
+            {deleteError && (
+              <div className="error-message">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={
+                  cancelDeleteFlow
+                }
+                disabled={isDeleteLoading}
+                className="secondary-button"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={requestDeleteOtp}
+                disabled={isDeleteLoading}
+                className="danger-button"
+              >
+                {isDeleteLoading
+                  ? "Sending..."
+                  : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================
+          ACCOUNT DELETE OTP
+      ========================= */}
+
+      {deleteStep === "otp" && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-otp-title"
+          className="modal-overlay"
+        >
+          <div className="modal-card delete-otp-card">
+            <div className="modal-icon danger-modal-icon">
+              !
+            </div>
+
+            <h2 id="delete-otp-title">
+              Verify account deletion
+            </h2>
+
+            <p>
+              Enter the 6-digit verification
+              code sent to{" "}
+              <strong>{email}</strong>.
+              Your account will be permanently
+              deleted after successful
+              verification.
+            </p>
+
+            {deleteError && (
+              <div className="error-message">
+                {deleteError}
+              </div>
+            )}
+
+            <div
+              className="delete-otp-grid"
+              aria-label="Account deletion verification code"
+            >
+              {deleteOtpDigits.map(
+                (digit, index) => (
+                  <input
+                    key={index}
+                    id={`delete-otp-${index}`}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete={
+                      index === 0
+                        ? "one-time-code"
+                        : "off"
+                    }
+                    maxLength={1}
+                    value={digit}
+                    onChange={(event) =>
+                      handleDeleteOtpChange(
+                        index,
+                        event.target.value
+                      )
+                    }
+                    onKeyDown={(event) =>
+                      handleDeleteOtpKeyDown(
+                        index,
+                        event
+                      )
+                    }
+                    disabled={isDeleteLoading}
+                    className="delete-otp-input"
+                    aria-label={`OTP digit ${index + 1}`}
+                  />
+                )
+              )}
+            </div>
+
+            <p className="otp-auto-note">
+              Verification starts automatically
+              after all 6 digits are entered.
+            </p>
+
+            <button
+              type="button"
+              onClick={cancelDeleteFlow}
+              disabled={isDeleteLoading}
+              className="secondary-button full-button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* =========================
+          ACCOUNT DELETED
+      ========================= */}
+
+      {deleteStep === "deleted" && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="account-deleted-title"
+          className="modal-overlay"
+        >
+          <div className="modal-card deleted-card">
+            <div className="modal-icon">
+              ✓
+            </div>
+
+            <h2 id="account-deleted-title">
+              Account deleted
+            </h2>
+
+            <p>
+              Your CyberLearn account and its
+              associated database data have
+              been permanently deleted.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.replace(
+                  "/"
+                );
+              }}
+              className="primary-button full-button"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* =========================
           PROFILE SAVE MODAL
@@ -1453,6 +2559,214 @@ export default function AccountSettingsClient({
           cursor: not-allowed;
         }
 
+        /* PASSWORD */
+
+        .password-flow {
+          display: grid;
+          gap: 20px;
+          padding-top: 20px;
+          border-top: 1px solid #eaecf0;
+        }
+
+        .password-field-wrapper {
+          position: relative;
+        }
+
+        .password-requirements {
+          position: absolute;
+          z-index: 50;
+          top: calc(100% + 10px);
+          left: 0;
+          width: min(360px, 100%);
+          box-sizing: border-box;
+          padding: 15px 16px;
+          border: 1px solid #d0d5dd;
+          border-radius: 12px;
+          background: #ffffff;
+          box-shadow:
+            0 12px 30px rgba(16, 24, 40, 0.12),
+            0 3px 8px rgba(16, 24, 40, 0.06);
+        }
+
+        .password-requirements-arrow {
+          position: absolute;
+          top: -6px;
+          left: 22px;
+          width: 11px;
+          height: 11px;
+          background: #ffffff;
+          border-left: 1px solid #d0d5dd;
+          border-top: 1px solid #d0d5dd;
+          transform: rotate(45deg);
+        }
+
+        .password-requirements p {
+          margin: 0 0 9px;
+          color: #344054;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .password-requirement {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 6px;
+          color: #667085;
+          font-size: 12px;
+        }
+
+        .password-requirement.valid {
+          color: #067647;
+        }
+
+        .password-requirement-icon {
+          width: 17px;
+          height: 17px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          border-radius: 50%;
+          background: #eaecf0;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .password-requirement.valid
+          .password-requirement-icon {
+          background: #d1fadf;
+          color: #067647;
+        }
+
+        .password-match-error {
+          margin: 7px 0 0;
+          color: #b42318;
+          font-size: 12px;
+        }
+
+        /* GOOGLE */
+
+        .google-info {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          min-width: 0;
+        }
+
+        .google-info .google-svg {
+          width: 30px;
+          height: 30px;
+          flex-shrink: 0;
+        }
+
+        .google-status-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+
+        .google-status-button .google-svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        .connected-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #12b76a;
+          box-shadow:
+            0 0 0 3px #dcfae6;
+        }
+
+        .google-modal-icon {
+          background: #f2f4f7;
+        }
+
+        /* DANGER */
+
+        .danger-card {
+          border-color: #fecdca;
+        }
+
+        .danger-button {
+          min-height: 40px;
+          padding: 9px 16px;
+          border: 1px solid #d92d20;
+          border-radius: 8px;
+          background: #ffffff;
+          color: #b42318;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition:
+            background 0.15s ease,
+            border-color 0.15s ease;
+        }
+
+        .danger-button:hover:not(:disabled) {
+          background: #fff5f4;
+        }
+
+        .danger-button:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        .danger-modal-icon {
+          background: #fff1f0;
+          color: #b42318;
+        }
+
+        .delete-otp-card {
+          max-width: 470px;
+        }
+
+        .delete-otp-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(6, minmax(0, 1fr));
+          gap: 9px;
+          margin: 20px 0 10px;
+        }
+
+        .delete-otp-input {
+          width: 100%;
+          aspect-ratio: 1;
+          min-width: 0;
+          box-sizing: border-box;
+          border: 1px solid #d0d5dd;
+          border-radius: 9px;
+          background: #ffffff;
+          color: #101828;
+          font-size: 22px;
+          font-weight: 700;
+          text-align: center;
+          outline: none;
+        }
+
+        .delete-otp-input:focus {
+          border-color: #172019;
+          box-shadow:
+            0 0 0 3px
+              rgba(23, 32, 25, 0.08);
+        }
+
+        .otp-auto-note {
+          margin: 0 0 18px;
+          color: #667085;
+          font-size: 12px;
+          line-height: 1.5;
+          text-align: center;
+        }
+
+        .deleted-card {
+          text-align: center;
+        }
+
         /* MODAL */
 
         .modal-overlay {
@@ -1545,6 +2859,26 @@ export default function AccountSettingsClient({
           }
         }
 
+        @media (max-width: 480px) {
+          .password-requirements {
+            width: 100%;
+            max-width: none;
+          }
+
+          .google-status-button,
+          .danger-button {
+            width: 100%;
+          }
+
+          .delete-otp-grid {
+            gap: 6px;
+          }
+
+          .delete-otp-input {
+            font-size: 19px;
+          }
+        }
+
         /* =========================
            MOBILE
         ========================= */
@@ -1608,3 +2942,67 @@ export default function AccountSettingsClient({
     </>
   );
 }
+
+
+/* =========================
+   PASSWORD REQUIREMENT
+========================= */
+
+function PasswordRequirement({
+  valid,
+  text,
+}: {
+  valid: boolean;
+  text: string;
+}) {
+  return (
+    <div
+      className={
+        valid
+          ? "password-requirement valid"
+          : "password-requirement"
+      }
+    >
+      <span className="password-requirement-icon">
+        {valid ? "✓" : "•"}
+      </span>
+
+      <span>{text}</span>
+    </div>
+  );
+}
+
+/* =========================
+   GOOGLE ICON
+========================= */
+
+function GoogleIcon() {
+  return (
+    <svg
+      className="google-svg"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        fill="#4285F4"
+        d="M21.35 12.27c0-.68-.06-1.34-.17-1.97H12v3.73h5.23a4.47 4.47 0 0 1-1.94 2.93v2.44h3.14c1.84-1.69 2.92-4.18 2.92-7.13Z"
+      />
+
+      <path
+        fill="#34A853"
+        d="M12 21.5c2.63 0 4.84-.87 6.45-2.36l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.52A9.74 9.74 0 0 0 12 21.5Z"
+      />
+
+      <path
+        fill="#FBBC05"
+        d="M6.54 13.59A5.85 5.85 0 0 1 6.23 12c0-.55.1-1.09.31-1.59V7.89H3.3A9.5 9.5 0 0 0 2.5 12c0 1.48.35 2.87.8 4.11l3.24-2.52Z"
+      />
+
+      <path
+        fill="#EA4335"
+        d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.46 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.39l3.24 2.52C7.31 8.1 9.46 6.38 12 6.38Z"
+      />
+    </svg>
+  );
+}
+

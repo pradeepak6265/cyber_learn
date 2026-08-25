@@ -5,11 +5,7 @@ import {
   useState,
 } from "react";
 
-import { useRouter } from "next/navigation";
-
 export default function LoginPage() {
-  const router = useRouter();
-
   const [email, setEmail] =
     useState("");
 
@@ -17,6 +13,9 @@ export default function LoginPage() {
     useState("");
 
   const [isLoading, setIsLoading] =
+    useState(false);
+
+  const [googleLoading, setGoogleLoading] =
     useState(false);
 
   const [serverError, setServerError] =
@@ -104,6 +103,38 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  /* =========================
+     GOOGLE LOGIN
+  ========================= */
+
+  function continueWithGoogle() {
+    if (
+      isLoading ||
+      googleLoading
+    ) {
+      return;
+    }
+
+    setServerError("");
+    setGoogleLoading(true);
+
+    /*
+     * Start the same OAuth flow
+     * used by the signup page.
+     *
+     * The server will:
+     *
+     * 1. Generate OAuth state
+     * 2. Redirect to Google
+     * 3. Receive Google's callback
+     * 4. Create/find the CyberLearn user
+     * 5. Create cyberlearn_session
+     * 6. Redirect to dashboard
+     */
+    window.location.href =
+      "/api/auth/google/start";
   }
 
   return (
@@ -211,6 +242,10 @@ export default function LoginPage() {
                   setServerError("");
                 }}
                 required
+                disabled={
+                  isLoading ||
+                  googleLoading
+                }
               />
 
               {email.length > 0 &&
@@ -257,6 +292,10 @@ export default function LoginPage() {
                   setServerError("");
                 }}
                 required
+                disabled={
+                  isLoading ||
+                  googleLoading
+                }
               />
 
             </div>
@@ -279,7 +318,8 @@ export default function LoginPage() {
               className="create-account-button"
               disabled={
                 !formValid ||
-                isLoading
+                isLoading ||
+                googleLoading
               }
             >
               {isLoading
@@ -302,17 +342,20 @@ export default function LoginPage() {
             <button
               type="button"
               className="google-button"
-              onClick={() => {
-                /*
-                 * Google authentication
-                 * will be connected later.
-                 */
-              }}
+              onClick={
+                continueWithGoogle
+              }
+              disabled={
+                isLoading ||
+                googleLoading
+              }
             >
               <GoogleIcon />
 
               <span>
-                Continue with Google
+                {googleLoading
+                  ? "Connecting to Google..."
+                  : "Continue with Google"}
               </span>
             </button>
 

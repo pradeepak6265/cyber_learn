@@ -13,12 +13,17 @@ model User {
   email         String   @unique
   passwordHash  String
   emailVerified Boolean  @default(false)
+
+  googleId      String?  @unique
+  authProvider  String   @default("password")
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  sessions     Session[]
-  resetTokens  PasswordResetToken[]
-  emailChanges EmailChangeVerification[]
+  sessions              Session[]
+  resetTokens           PasswordResetToken[]
+  emailChanges          EmailChangeVerification[]
+  deletionVerifications AccountDeletionVerification[]
 
   @@map("users")
 }
@@ -123,4 +128,22 @@ model EmailChangeVerification {
   @@index([newEmail])
   @@index([verificationTokenExpiresAt])
   @@map("email_change_verifications")
+}
+
+model AccountDeletionVerification {
+  id     String @id @default(cuid())
+  userId String
+
+  otpHash      String
+  otpExpiresAt DateTime
+  otpAttempts  Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([otpExpiresAt])
+  @@map("account_deletion_verifications")
 }

@@ -178,6 +178,8 @@ export default async function AccountSettingsPage() {
           surname={user.surname}
           email={user.email}
           emailVerified={user.emailVerified}
+          authProvider={user.authProvider}
+          googleId={user.googleId}
         />
 
         {/* =========================
